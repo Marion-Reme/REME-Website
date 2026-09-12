@@ -1,12 +1,40 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { KeyRound, LoaderCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { createClient } from "@/lib/supabase/client";
+
+async function prepareEnrolment() {
+  const supabase = createClient();
+  const factors = await supabase.auth.mfa.listFactors();
+  if (factors.error) throw factors.error;
+  if (factors.data.totp.some((factor) => factor.status === "verified")) return null;
+
+  // Unfinished enrolments cannot return their secret again. Replace only this
+  // app's unverified factors; never remove a working authenticator.
+  for (const factor of factors.data.all) {
+    if (
+      factor.factor_type === "totp" &&
+      factor.status === "unverified" &&
+      factor.friendly_name === "REME manager"
+    ) {
+      const removed = await supabase.auth.mfa.unenroll({ factorId: factor.id });
+      if (removed.error) throw removed.error;
+    }
+  }
+  const result = await supabase.auth.mfa.enroll({
+    factorType: "totp",
+    friendlyName: "REME manager",
+  });
+  if (result.error) throw result.error;
+  if (!result.data.id || !result.data.totp.qr_code || !result.data.totp.secret)
+    throw new Error("Authenticator setup was incomplete. Please try again.");
+  return result.data;
+}
 
 export function MfaEnrol() {
   const [factorId, setFactorId] = useState("");
@@ -17,26 +45,46 @@ export function MfaEnrol() {
   const [busy, setBusy] = useState(true);
   const router = useRouter();
 
+  const preparation = useRef<ReturnType<typeof prepareEnrolment> | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
   useEffect(() => {
-    void (async () => {
-      const supabase = createClient();
-      const { data, error: enrollError } = await supabase.auth.mfa.enroll({
-        factorType: "totp",
-        friendlyName: "REME manager",
-      });
-      if (enrollError) {
-        setError(enrollError.message);
+    let active = true;
+    // Share the request across React Strict Mode's effect replay.
+    preparation.current ??= prepareEnrolment();
+    void preparation.current
+      .then((data) => {
+        if (!active) return;
+        if (!data) {
+          router.replace("/mfa");
+          return;
+        }
+        setFactorId(data.id);
+        const qrCode = data.totp.qr_code;
+        setQr(
+          qrCode.trimStart().startsWith("<svg")
+            ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(qrCode)}`
+            : qrCode,
+        );
+        setSecret(data.totp.secret);
         setBusy(false);
-        return;
-      }
-      setFactorId(data.id);
-      setQr(data.totp.qr_code);
-      setSecret(data.totp.secret);
-      setBusy(false);
-    })();
-  }, []);
+      })
+      .catch((cause: unknown) => {
+        if (!active) return;
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Unable to prepare your authenticator. Please try again.",
+        );
+        setBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [attempt, router]);
 
   const verify = async () => {
+    if (busy || !factorId || code.length !== 6) return;
     setBusy(true);
     setError("");
     const supabase = createClient();
@@ -71,6 +119,27 @@ export function MfaEnrol() {
       <div className="flex items-center gap-2 text-sm text-[#65716d]">
         <LoaderCircle className="h-4 w-4 animate-spin" />
         Preparing authenticator...
+      </div>
+    );
+  if (!factorId || !secret || !qr)
+    return (
+      <div className="space-y-4">
+        {error && (
+          <p role="alert" className="rounded-xl bg-[#f5dfdc] p-3 text-sm text-[#913a31]">
+            {error}
+          </p>
+        )}
+        <Button
+          className="w-full"
+          onClick={() => {
+            preparation.current = null;
+            setError("");
+            setBusy(true);
+            setAttempt((value) => value + 1);
+          }}
+        >
+          Retry authenticator setup
+        </Button>
       </div>
     );
   return (
@@ -111,14 +180,43 @@ export function MfaEnrol() {
 export function MfaChallenge() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const router = useRouter();
+
+  useEffect(() => {
+    let active = true;
+    void createClient()
+      .auth.mfa.listFactors()
+      .then(({ data, error: factorError }) => {
+        if (!active) return;
+        if (factorError) {
+          setError(factorError.message);
+        } else if (!data.totp.some((factor) => factor.status === "verified")) {
+          router.replace("/security/mfa-enrol");
+          return;
+        }
+        setBusy(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setError("Unable to check your authenticator. Please try again.");
+        setBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   const verify = async () => {
     setBusy(true);
     setError("");
     const supabase = createClient();
     const factors = await supabase.auth.mfa.listFactors();
+    if (factors.error) {
+      setError(factors.error.message);
+      setBusy(false);
+      return;
+    }
     const factor = factors.data?.totp.find((item) => item.status === "verified");
     if (!factor) {
       router.replace("/security/mfa-enrol");
@@ -137,6 +235,12 @@ export function MfaChallenge() {
     });
     if (result.error) {
       setError("Incorrect code. Try the current code from your authenticator.");
+      setBusy(false);
+      return;
+    }
+    const saved = await supabase.rpc("set_mfa_enrolled", { p_enrolled: true });
+    if (saved.error) {
+      setError(saved.error.message);
       setBusy(false);
       return;
     }
