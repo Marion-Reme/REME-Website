@@ -99,63 +99,97 @@ export default async function WorkOrdersPage({
         {error ? (
           <p className="p-6 text-sm text-[#913a31]">Could not load work orders.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] text-left text-sm">
-              <thead className="bg-[#f8f6f1] text-xs tracking-wider text-[#737d7a] uppercase">
-                <tr>
-                  <th className="px-5 py-3 font-bold">Order</th>
-                  <th className="px-5 py-3 font-bold">Client / site</th>
-                  <th className="px-5 py-3 font-bold">Status</th>
-                  <th className="px-5 py-3 font-bold">Lead</th>
-                  <th className="px-5 py-3 font-bold">Due</th>
-                  <th className="px-5 py-3 text-right font-bold">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#ebe7df]">
-                {rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-[#faf9f6]">
-                    <td className="px-5 py-4">
-                      <Link
-                        href={`/manager/work-orders/${row.id}`}
-                        className="font-bold text-[#24575d] hover:underline"
-                      >
-                        {row.work_order_number}
-                      </Link>
-                      <p className="mt-1 text-xs text-[#7c8582]">
-                        {row.client_reference || "No client reference"} · {row.task?.length ?? 0}{" "}
-                        tasks
-                      </p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="font-semibold">{row.client?.name}</p>
-                      <p className="mt-1 text-xs text-[#7c8582]">{row.site?.suburb}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <StatusBadge status={row.status} />
-                    </td>
-                    <td className="px-5 py-4 text-[#596461]">
-                      {row.lead_worker?.user_profile?.display_name ?? (
-                        <span className="font-semibold text-[#9a6324]">Unassigned</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-[#596461]">
-                      {formatDate(row.completion_due_date)}
-                    </td>
-                    <td className="px-5 py-4 text-right font-mono font-semibold">
-                      {formatMoney(row.work_order_totals?.total_cents)}
-                    </td>
-                  </tr>
-                ))}
-                {!rows.length && (
+          <>
+            <div className="divide-y divide-[#ebe7df] lg:hidden">
+              {rows.map((row) => (
+                <Link
+                  key={row.id}
+                  href={`/manager/work-orders/${row.id}`}
+                  className="block space-y-2 p-4 break-words hover:bg-[#faf9f6]"
+                >
+                  <p className="font-bold text-[#24575d]">{row.work_order_number}</p>
+                  <StatusBadge status={row.status} />
+                  <p className="text-sm">
+                    {row.client?.name} · {row.site?.suburb}
+                  </p>
+                  <p className="text-xs text-[#607181]">
+                    {row.client_reference || "No client reference"} · {row.task?.length ?? 0} tasks
+                  </p>
+                  <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+                    <dt>Lead</dt>
+                    <dd>{row.lead_worker?.user_profile?.display_name ?? "Unassigned"}</dd>
+                    <dt>Due</dt>
+                    <dd>{formatDate(row.completion_due_date)}</dd>
+                    <dt>Total</dt>
+                    <dd>{formatMoney(row.work_order_totals?.total_cents ?? 0)}</dd>
+                  </dl>
+                </Link>
+              ))}
+              {!rows.length && <p className="p-6 text-sm">No work orders found.</p>}
+            </div>
+            <div
+              role="region"
+              aria-label="Work orders, scroll horizontally for all columns"
+              tabIndex={0}
+              className="hidden overflow-x-auto lg:block"
+            >
+              <table className="w-full min-w-[860px] text-left text-sm">
+                <thead className="bg-[#f8f6f1] text-xs tracking-wider text-[#737d7a] uppercase">
                   <tr>
-                    <td colSpan={6} className="px-5 py-16 text-center text-[#737d7a]">
-                      No work orders match these filters.
-                    </td>
+                    <th className="px-5 py-3 font-bold">Order</th>
+                    <th className="px-5 py-3 font-bold">Client / site</th>
+                    <th className="px-5 py-3 font-bold">Status</th>
+                    <th className="px-5 py-3 font-bold">Lead</th>
+                    <th className="px-5 py-3 font-bold">Due</th>
+                    <th className="px-5 py-3 text-right font-bold">Total</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-[#ebe7df]">
+                  {rows.map((row) => (
+                    <tr key={row.id} className="hover:bg-[#faf9f6]">
+                      <td className="px-5 py-4">
+                        <Link
+                          href={`/manager/work-orders/${row.id}`}
+                          className="font-bold text-[#24575d] hover:underline"
+                        >
+                          {row.work_order_number}
+                        </Link>
+                        <p className="mt-1 text-xs text-[#7c8582]">
+                          {row.client_reference || "No client reference"} · {row.task?.length ?? 0}{" "}
+                          tasks
+                        </p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="font-semibold">{row.client?.name}</p>
+                        <p className="mt-1 text-xs text-[#7c8582]">{row.site?.suburb}</p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <StatusBadge status={row.status} />
+                      </td>
+                      <td className="px-5 py-4 text-[#596461]">
+                        {row.lead_worker?.user_profile?.display_name ?? (
+                          <span className="font-semibold text-[#9a6324]">Unassigned</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 text-[#596461]">
+                        {formatDate(row.completion_due_date)}
+                      </td>
+                      <td className="px-5 py-4 text-right font-mono font-semibold">
+                        {formatMoney(row.work_order_totals?.total_cents)}
+                      </td>
+                    </tr>
+                  ))}
+                  {!rows.length && (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-16 text-center text-[#737d7a]">
+                        No work orders match these filters.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Card>
     </>

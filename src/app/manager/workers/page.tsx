@@ -3,6 +3,7 @@ import {
   InviteWorkerForm,
   DisableWorkerForm,
   EnableWorkerForm,
+  RemoveWorkerForm,
 } from "@/components/worker-admin-forms";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -32,8 +33,9 @@ export default async function WorkersPage() {
   const { data } = await supabase
     .from("worker")
     .select(
-      "id,trade_specialties,default_daily_capacity,sms_opt_in,user_profile:user_id(id,display_name,email,phone,is_active,disabled_reason,mfa_enrolled),assignment(status,task:task_id(status))",
+      "id,trade_specialties,default_daily_capacity,sms_opt_in,user_profile:user_id!inner(id,display_name,email,phone,is_active,disabled_reason,mfa_enrolled),assignment(status,task:task_id(status))",
     )
+    .is("user_profile.deleted_at", null)
     .order("created_at");
   const workers = (data ?? []) as unknown as WorkerRow[];
   return (
@@ -104,6 +106,7 @@ export default async function WorkersPage() {
                           </p>
                         )}
                         <EnableWorkerForm userId={worker.user_profile.id} />
+                        <RemoveWorkerForm userId={worker.user_profile.id} />
                       </div>
                     ))}
                 </article>

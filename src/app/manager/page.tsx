@@ -186,7 +186,7 @@ export default async function ManagerDashboard() {
                   <Link
                     key={item.id}
                     href={`/manager/work-orders/${order?.id}`}
-                    className="grid grid-cols-[64px_1fr_auto] items-center gap-3 px-5 py-4 hover:bg-[#faf9f6]"
+                    className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-3 px-5 py-4 hover:bg-[#faf9f6] sm:grid-cols-[64px_minmax(0,1fr)_auto]"
                   >
                     <span className="font-mono text-sm font-semibold text-[#596461]">
                       {item.start_time?.slice(0, 5) ?? "Any"}
@@ -202,7 +202,11 @@ export default async function ManagerDashboard() {
                         {item.worker?.user_profile?.display_name ?? "No worker"}
                       </p>
                     </div>
-                    {status && <StatusBadge status={status} />}
+                    {status && (
+                      <div className="col-start-2 sm:col-start-auto">
+                        <StatusBadge status={status} />
+                      </div>
+                    )}
                   </Link>
                 );
               })

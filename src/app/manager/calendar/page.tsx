@@ -190,7 +190,59 @@ export default async function CalendarPage({
           </>
         }
       />
-      <Card className="overflow-x-auto">
+      <section aria-label="Weekly agenda" className="space-y-4 lg:hidden">
+        {days.map((day) => {
+          const date = format(day, "yyyy-MM-dd");
+          const items = schedule.filter((item) => item.planned_date === date);
+          return (
+            <Card key={date} className="p-4">
+              <h2 className="mb-3 font-semibold">
+                {format(day, "EEEE, d MMM")}
+                {date === today ? " · Today" : ""}
+              </h2>
+              <div className="space-y-3">
+                {items.map((item) => {
+                  const order = item.task?.work_order ?? item.work_order;
+                  const worker = workers.find((worker) => worker.id === item.worker_id);
+                  const dailyHours = items
+                    .filter((entry) => entry.worker_id === item.worker_id)
+                    .reduce((total, entry) => total + Number(entry.estimated_hours ?? 0), 0);
+                  const status = item.task?.status ?? order?.status;
+                  return (
+                    <Link
+                      key={item.id}
+                      href={`/manager/work-orders/${order?.id}`}
+                      className="block min-h-11 rounded-xl border border-[#cfdedc] bg-[#e8f1ef] p-3 text-sm break-words"
+                    >
+                      <p className="font-semibold">
+                        {item.start_time?.slice(0, 5) ?? "Any time"} · {order?.work_order_number}
+                      </p>
+                      <p>{worker?.user_profile?.display_name ?? "Unassigned / disabled worker"}</p>
+                      <p className="my-2">
+                        {item.task?.description ?? "Whole work order · All tasks"}
+                      </p>
+                      {item.estimated_hours && <p className="mb-2">{item.estimated_hours} hours</p>}
+                      {status && <StatusBadge status={status} />}
+                      {dailyHours > 8 && (
+                        <div className="mt-2">
+                          <Badge tone="red">{dailyHours}h booked for this worker today</Badge>
+                        </div>
+                      )}
+                    </Link>
+                  );
+                })}
+                {!items.length && <p className="text-sm text-[#607181]">No work scheduled.</p>}
+              </div>
+            </Card>
+          );
+        })}
+      </section>
+      <Card
+        role="region"
+        aria-label="Weekly crew calendar, scroll horizontally"
+        tabIndex={0}
+        className="hidden overflow-x-auto lg:block"
+      >
         <div className="min-w-[1050px]">
           <div className="grid grid-cols-[170px_repeat(7,1fr)] border-b border-[#ddd8ce] bg-[#f8f6f1]">
             <div className="p-3 text-xs font-bold tracking-wider text-[#737d7a] uppercase">

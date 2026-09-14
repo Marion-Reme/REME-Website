@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { disableWorker, enableWorker, inviteWorker } from "@/actions/workers";
+import { disableWorker, enableWorker, inviteWorker, removeWorker } from "@/actions/workers";
 import type { ActionState } from "@/actions/types";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
@@ -66,5 +66,46 @@ export function EnableWorkerForm({ userId }: { userId: string }) {
         Re-enable account
       </SubmitButton>
     </form>
+  );
+}
+
+export function RemoveWorkerForm({ userId }: { userId: string }) {
+  const [state, action] = useActionState(removeWorker, {} as ActionState);
+  return (
+    <details className="mt-3">
+      <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-[#913a31]">
+        Remove worker
+      </summary>
+      <form action={action} className="space-y-3">
+        <input type="hidden" name="userId" value={userId} />
+        <p className="text-sm">
+          Permanently delete this sign-in account. Previous work records remain. Reassign any open
+          tasks. This cannot be undone.
+        </p>
+        <label className="flex min-h-11 items-center gap-3 text-sm">
+          <input
+            type="checkbox"
+            name="confirmRemoval"
+            value="yes"
+            required
+            className="h-5 w-5 shrink-0"
+          />
+          I confirm removal of this account.
+        </label>
+        {state.error && (
+          <p role="alert" className="text-sm text-[#913a31]">
+            {state.error}
+          </p>
+        )}
+        {state.message && (
+          <p role="status" className="text-sm text-[#2f6249]">
+            {state.message}
+          </p>
+        )}
+        <SubmitButton variant="danger" className="w-full" pendingText="Removing...">
+          Delete account permanently
+        </SubmitButton>
+      </form>
+    </details>
   );
 }

@@ -14,7 +14,7 @@ export function ReviewForm({ submissionId }: { submissionId: number }) {
     <form action={action} className="mt-4 space-y-3">
       <input type="hidden" name="submissionId" value={submissionId} />
       <input type="hidden" name="decision" value={decision} />
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid gap-2 sm:grid-cols-3">
         <Button
           type="button"
           size="sm"

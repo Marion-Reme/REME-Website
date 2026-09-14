@@ -47,6 +47,7 @@ export async function disableWorker(_: ActionState, formData: FormData): Promise
     .eq("id", userId)
     .eq("tenant_id", manager.tenant_id)
     .eq("role", "worker")
+    .is("deleted_at", null)
     .select("id");
   if (error) return actionError("worker.disable", error, "The worker could not be disabled.");
   // A filtered update that matches nothing is not an error. Banning before
@@ -76,6 +77,7 @@ export async function enableWorker(_: ActionState, formData: FormData): Promise<
     .eq("id", userId)
     .eq("tenant_id", manager.tenant_id)
     .eq("role", "worker")
+    .is("deleted_at", null)
     .maybeSingle();
   if (lookupError)
     return actionError("worker.enable_lookup", lookupError, "The worker could not be re-enabled.");
@@ -98,7 +100,8 @@ export async function enableWorker(_: ActionState, formData: FormData): Promise<
     .update({ is_active: true, disabled_at: null, disabled_reason: null })
     .eq("id", userId)
     .eq("tenant_id", manager.tenant_id)
-    .eq("role", "worker");
+    .eq("role", "worker")
+    .is("deleted_at", null);
   if (error) return actionError("worker.enable", error, "The worker could not be re-enabled.");
   revalidatePath("/manager/workers");
   revalidatePath("/manager/settings");
@@ -106,4 +109,33 @@ export async function enableWorker(_: ActionState, formData: FormData): Promise<
     ok: true,
     message: "Worker re-enabled. They can sign in again with their existing password.",
   };
+}
+
+export async function removeWorker(_: ActionState, formData: FormData): Promise<ActionState> {
+  const manager = await assertRole("manager");
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId || formData.get("confirmRemoval") !== "yes")
+    return { error: "Confirm that you want to permanently remove this account." };
+  const supabase = await createClient();
+  const { data: target, error: lookupError } = await supabase
+    .from("user_profile")
+    .select("id,is_active")
+    .eq("id", userId)
+    .eq("tenant_id", manager.tenant_id)
+    .eq("role", "worker")
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (lookupError)
+    return actionError("worker.remove_lookup", lookupError, "The worker could not be removed.");
+  if (!target) return { error: "That worker is not on your team." };
+  if (target.is_active) return { error: "Disable the worker before removing their account." };
+  // Auth soft deletion is irreversible and retains the ID referenced by job history.
+  // Migration 0024 marks the profile removed in the same Auth transaction.
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.deleteUser(userId, true);
+  if (error)
+    return actionError("worker.remove", error, "The account could not be removed. Try again.");
+  revalidatePath("/manager/workers");
+  revalidatePath("/manager/settings");
+  return { ok: true, message: "Account removed. Previous work records have been retained." };
 }
