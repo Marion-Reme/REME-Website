@@ -1,5 +1,9 @@
 import { BriefcaseBusiness, UserPlus } from "lucide-react";
-import { InviteWorkerForm, DisableWorkerForm } from "@/components/worker-admin-forms";
+import {
+  InviteWorkerForm,
+  DisableWorkerForm,
+  EnableWorkerForm,
+} from "@/components/worker-admin-forms";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -17,6 +21,7 @@ type WorkerRow = {
     email: string;
     phone: string | null;
     is_active: boolean;
+    disabled_reason: string | null;
     mfa_enrolled: boolean;
   } | null;
   assignment: Array<{ status: string; task: { status: string } | null }>;
@@ -27,7 +32,7 @@ export default async function WorkersPage() {
   const { data } = await supabase
     .from("worker")
     .select(
-      "id,trade_specialties,default_daily_capacity,sms_opt_in,user_profile:user_id(id,display_name,email,phone,is_active,mfa_enrolled),assignment(status,task:task_id(status))",
+      "id,trade_specialties,default_daily_capacity,sms_opt_in,user_profile:user_id(id,display_name,email,phone,is_active,disabled_reason,mfa_enrolled),assignment(status,task:task_id(status))",
     )
     .order("created_at");
   const workers = (data ?? []) as unknown as WorkerRow[];
@@ -36,7 +41,7 @@ export default async function WorkersPage() {
       <PageHeader
         eyebrow="Team"
         title="Workers"
-        description="Invite field workers, see current load and safely disable departed accounts."
+        description="Invite field workers, see current load, and disable or restore accounts."
       />
       <div className="grid gap-6 xl:grid-cols-[1fr_330px]">
         <Card className="overflow-hidden">
@@ -81,16 +86,26 @@ export default async function WorkersPage() {
                       ))}
                     </div>
                   )}
-                  {worker.user_profile?.is_active && (
-                    <details className="mt-3">
-                      <summary className="cursor-pointer text-xs font-semibold text-[#913a31]">
-                        Disable account
-                      </summary>
-                      <div className="mt-2">
-                        <DisableWorkerForm userId={worker.user_profile.id} />
+                  {worker.user_profile &&
+                    (worker.user_profile.is_active ? (
+                      <details className="mt-3">
+                        <summary className="cursor-pointer text-xs font-semibold text-[#913a31]">
+                          Disable account
+                        </summary>
+                        <div className="mt-2">
+                          <DisableWorkerForm userId={worker.user_profile.id} />
+                        </div>
+                      </details>
+                    ) : (
+                      <div className="mt-3 space-y-2">
+                        {worker.user_profile.disabled_reason && (
+                          <p className="text-xs leading-5 text-[#7b8582]">
+                            Disabled: {worker.user_profile.disabled_reason}
+                          </p>
+                        )}
+                        <EnableWorkerForm userId={worker.user_profile.id} />
                       </div>
-                    </details>
-                  )}
+                    ))}
                 </article>
               );
             })}
