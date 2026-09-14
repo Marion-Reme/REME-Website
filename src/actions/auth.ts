@@ -69,7 +69,7 @@ export async function updatePassword(_: AuthState, formData: FormData): Promise<
   const password = String(formData.get("password") ?? "");
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
   const intent = formData.get("intent") === "invite" ? "invite" : "recovery";
-  if (password.length < 12) return { error: "Use at least 12 characters." };
+  if (password.length < 8) return { error: "Use at least 8 characters." };
   if (password !== confirmPassword) return { error: "The passwords do not match." };
   const supabase = await createClient();
   const {

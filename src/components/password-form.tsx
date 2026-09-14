@@ -28,14 +28,14 @@ export function PasswordForm({
           <input type="hidden" name="intent" value={intent} />
           <div>
             <Label htmlFor="password">
-              New password <span className="font-normal text-[#7c8582]">(12+ characters)</span>
+              New password <span className="font-normal text-[#7c8582]">(8+ characters)</span>
             </Label>
             <Input
               id="password"
               name="password"
               type="password"
               required
-              minLength={12}
+              minLength={8}
               autoComplete="new-password"
             />
           </div>
@@ -46,7 +46,7 @@ export function PasswordForm({
               name="confirmPassword"
               type="password"
               required
-              minLength={12}
+              minLength={8}
               autoComplete="new-password"
             />
           </div>

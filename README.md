@@ -117,3 +117,14 @@ Database policy tests run with `supabase test db`. End-to-end tests require a mi
 - Geocoding is not automatic. Map links use the entered address.
 - Original-PDF schema and secure download path exist, but manual-entry MVP has no PDF-upload screen.
 - A production restore drill, provider deliverability test and mobile browser E2E run require the owner’s external credentials and devices.
+
+## Removing a disabled worker
+
+Apply migration `0024_remove_disabled_worker.sql` before deploying the removal UI.
+Managers can open **Workers**, disable an account, then expand **Remove worker**
+and confirm permanent removal. Auth soft deletion removes sign-in credentials
+irreversibly while retaining the identity needed by assignments, photos and audit
+history. A database trigger marks the profile removed in the same transaction,
+releases its email for future invitations and prevents reactivation. Removed
+accounts are hidden from Workers and Team access; existing work records remain.
+Open work must still be reassigned by a manager.

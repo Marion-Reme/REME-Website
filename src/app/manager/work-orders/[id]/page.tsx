@@ -321,15 +321,15 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
                         </div>
                       </details>
                       {task.status === "completed" && (
-                        <form action={reopenTask} className="mt-3 flex gap-2">
+                        <form action={reopenTask} className="mt-3 flex flex-col gap-2 sm:flex-row">
                           <input type="hidden" name="taskId" value={task.id} />
                           <input
                             name="reason"
                             required
                             placeholder="Reason for reopening"
-                            className="min-h-10 flex-1 rounded-lg border border-[#d9d4c9] px-3 text-sm"
+                            className="min-h-11 min-w-0 flex-1 rounded-lg border border-[#d9d4c9] px-3 text-sm"
                           />
-                          <button className="inline-flex items-center gap-1.5 rounded-lg border border-[#d9d4c9] px-3 text-sm font-semibold">
+                          <button className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-[#d9d4c9] px-3 text-sm font-semibold">
                             <RotateCcw className="h-3.5 w-3.5" />
                             Reopen
                           </button>

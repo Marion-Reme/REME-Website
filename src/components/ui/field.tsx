@@ -22,7 +22,7 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
   return (
     <input
       className={cn(
-        "min-h-11 w-full rounded-xl border border-[#d9d4c9] bg-white px-3.5 text-[15px] text-[#24312f] outline-none placeholder:text-[#9aa19e] focus:border-[#007ba7] focus:ring-3 focus:ring-[#d9eef6]",
+        "min-h-11 w-full min-w-0 rounded-xl border border-[#d9d4c9] bg-white px-3.5 text-base text-[#24312f] outline-none placeholder:text-[#9aa19e] focus:border-[#007ba7] focus:ring-3 focus:ring-[#d9eef6] sm:text-[15px]",
         className,
       )}
       {...props}
@@ -34,7 +34,7 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
   return (
     <select
       className={cn(
-        "min-h-11 w-full rounded-xl border border-[#d9d4c9] bg-white px-3.5 text-[15px] text-[#24312f] outline-none focus:border-[#007ba7] focus:ring-3 focus:ring-[#d9eef6]",
+        "min-h-11 w-full min-w-0 rounded-xl border border-[#d9d4c9] bg-white px-3.5 text-base text-[#24312f] outline-none focus:border-[#007ba7] focus:ring-3 focus:ring-[#d9eef6] sm:text-[15px]",
         className,
       )}
       {...props}
@@ -46,7 +46,7 @@ export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
   return (
     <textarea
       className={cn(
-        "min-h-28 w-full resize-y rounded-xl border border-[#d9d4c9] bg-white px-3.5 py-3 text-[15px] text-[#24312f] outline-none placeholder:text-[#9aa19e] focus:border-[#007ba7] focus:ring-3 focus:ring-[#d9eef6]",
+        "min-h-28 w-full resize-y rounded-xl border border-[#d9d4c9] bg-white px-3.5 py-3 text-base text-[#24312f] outline-none placeholder:text-[#9aa19e] focus:border-[#007ba7] focus:ring-3 focus:ring-[#d9eef6] sm:text-[15px]",
         className,
       )}
       {...props}

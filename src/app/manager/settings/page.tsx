@@ -21,6 +21,7 @@ export default async function SettingsPage() {
       .from("user_profile")
       .select("id,display_name,email,phone,role,is_active")
       .eq("tenant_id", profile.tenant_id)
+      .is("deleted_at", null)
       .order("display_name"),
   ]);
   if (!tenant) return null;
@@ -44,7 +45,7 @@ export default async function SettingsPage() {
                 <ShieldCheck className="h-5 w-5" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-semibold">Pricing isolation</h2>
                   <Badge tone="green">Enforced</Badge>
                 </div>

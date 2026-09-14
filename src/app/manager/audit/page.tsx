@@ -36,11 +36,11 @@ export default async function AuditPage() {
         <div className="divide-y divide-[#e9e5dd]">
           {events.map((event) => (
             <details key={event.id} className="group">
-              <summary className="grid cursor-pointer grid-cols-[38px_1fr_auto] items-center gap-3 px-5 py-4 hover:bg-[#faf9f6]">
+              <summary className="grid cursor-pointer grid-cols-[38px_minmax(0,1fr)] items-center gap-3 px-5 py-4 hover:bg-[#faf9f6] sm:grid-cols-[38px_minmax(0,1fr)_auto]">
                 <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#e6f3f8] text-[#0077a8]">
                   <History className="h-4 w-4" />
                 </div>
-                <div>
+                <div className="min-w-0 break-words">
                   <p className="text-sm font-semibold">
                     {titleCase(event.action.replace(".", " "))}
                   </p>
@@ -48,12 +48,12 @@ export default async function AuditPage() {
                     {event.actor?.display_name ?? "System"} · {event.entity_type} #{event.entity_id}
                   </p>
                 </div>
-                <time className="text-xs text-[#78817f]">
+                <time className="col-start-2 text-xs text-[#78817f] sm:col-start-auto">
                   {formatDate(event.created_at, "d MMM yyyy, h:mm a")}
                 </time>
               </summary>
               <div className="grid gap-3 border-t border-[#eeeae3] bg-[#f8f6f1] p-4 md:grid-cols-2">
-                <div>
+                <div className="min-w-0 break-words">
                   <p className="mb-2 text-xs font-bold tracking-wider text-[#7a8380] uppercase">
                     Before
                   </p>
@@ -61,7 +61,7 @@ export default async function AuditPage() {
                     {JSON.stringify(event.before, null, 2) ?? "-"}
                   </pre>
                 </div>
-                <div>
+                <div className="min-w-0 break-words">
                   <p className="mb-2 text-xs font-bold tracking-wider text-[#7a8380] uppercase">
                     After
                   </p>
