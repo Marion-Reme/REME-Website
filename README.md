@@ -142,8 +142,9 @@ Apply migration `0025_work_order_lifecycle.sql` before deploying this UI. It add
   references, dates, instructions and total. Jobs are added, edited and deleted
   on the work order page. Workers on open jobs are told when details they can see
   change.
-- **Completing work.** **Mark complete** closes one job; **Mark work order
-  complete** closes every open job and approves anything waiting in Review.
+- **Completing work.** **Mark complete** closes one job; **Mark all jobs
+  complete**, at the top of the jobs list, closes every open job after one
+  confirmation and approves anything waiting in Review.
   Workers can still send jobs in with photos from their phones. A fully complete
   order moves to the **Completed** tab of Work orders, and **Reopen work order**
   brings it back.

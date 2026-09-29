@@ -3,11 +3,12 @@ import { createElement } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkOrderCrewForm } from "@/components/assignment-form";
-import { DeleteWorkOrderForm } from "@/components/work-order-actions";
+import { CompleteWorkOrderForm, DeleteWorkOrderForm } from "@/components/work-order-actions";
 
 const mocks = vi.hoisted(() => ({
   assignWorkOrderCrew: vi.fn(),
   deleteWorkOrder: vi.fn(),
+  completeWorkOrderTasks: vi.fn(),
 }));
 vi.mock("@/actions/work-orders", () => ({
   assignWorkOrderCrew: mocks.assignWorkOrderCrew,
@@ -15,7 +16,7 @@ vi.mock("@/actions/work-orders", () => ({
   scheduleTask: vi.fn(),
   unscheduleEntry: vi.fn(),
   addWorkOrderTask: vi.fn(),
-  completeWorkOrderTasks: vi.fn(),
+  completeWorkOrderTasks: mocks.completeWorkOrderTasks,
   deleteTask: vi.fn(),
   reopenWorkOrder: vi.fn(),
 }));
@@ -32,6 +33,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.assignWorkOrderCrew.mockResolvedValue({ ok: true, message: "Crew saved." });
   mocks.deleteWorkOrder.mockResolvedValue({ error: "Not deleted in this test." });
+  mocks.completeWorkOrderTasks.mockResolvedValue({ ok: true, message: "All done." });
 });
 afterEach(cleanup);
 
@@ -108,5 +110,23 @@ describe("delete work order form", () => {
     expect(button.closest("fieldset")?.disabled).toBe(true);
     fireEvent.change(input, { target: { value: " 20299-29572 " } });
     expect(button.closest("fieldset")?.disabled).toBe(false);
+  });
+});
+
+describe("mark all jobs complete", () => {
+  it("asks once, can be cancelled, and completes every open job on confirm", async () => {
+    render(createElement(CompleteWorkOrderForm, { workOrderId: 7, openJobs: 12 }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark all jobs complete" }));
+    expect(screen.getByText(/Mark all 12 open jobs complete\?/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(mocks.completeWorkOrderTasks).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark all jobs complete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, complete all jobs" }));
+    await waitFor(() => expect(mocks.completeWorkOrderTasks).toHaveBeenCalledTimes(1));
+    const formData = mocks.completeWorkOrderTasks.mock.calls[0][1] as FormData;
+    expect(formData.get("workOrderId")).toBe("7");
+    // No job id means every open job on the order.
+    expect(formData.get("taskId")).toBeNull();
   });
 });
