@@ -128,3 +128,28 @@ history. A database trigger marks the profile removed in the same transaction,
 releases its email for future invitations and prevents reactivation. Removed
 accounts are hidden from Workers and Team access; existing work records remain.
 Open work must still be reassigned by a manager.
+
+## Editing, completing and deleting work orders
+
+Apply migration `0025_work_order_lifecycle.sql` before deploying this UI. It adds:
+
+- **Crew assignment.** A work order is assigned as a whole: tick one or more
+  workers, pick a lead, and optionally pick work days. Every open job goes to
+  every ticked worker, and each chosen day books the whole crew on the order.
+  Per-job assignment is switched off for now behind `PER_JOB_ASSIGNMENT_ENABLED`
+  in `src/app/manager/work-orders/[id]/page.tsx`.
+- **Editing after saving.** **Edit details** changes the client, site,
+  references, dates, instructions and total. Jobs are added, edited and deleted
+  on the work order page. Workers on open jobs are told when details they can see
+  change.
+- **Completing work.** **Mark complete** closes one job; **Mark work order
+  complete** closes every open job and approves anything waiting in Review.
+  Workers can still send jobs in with photos from their phones. A fully complete
+  order moves to the **Completed** tab of Work orders, and **Reopen work order**
+  brings it back.
+- **Deleting.** **Delete job** and **Delete work order** are permanent and remove
+  schedules, assignments, notes, submissions and photos with them. Deleting an
+  order requires typing its number. The audit log keeps a record of what was
+  deleted, and the R2 objects are removed after the database delete commits. The
+  last job on an order cannot be deleted on its own. Use **Cancel work order**
+  instead of deleting when the history should be kept.

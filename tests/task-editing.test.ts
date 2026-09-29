@@ -49,7 +49,7 @@ describe("manager task editing", () => {
     const actions = source("src/actions/work-orders.ts");
     expect(actions).toContain("export async function updateTaskDetails");
     const start = actions.indexOf("export async function updateTaskDetails");
-    const end = actions.indexOf("export async function assignWholeOrder", start);
+    const end = actions.indexOf("export async function", start + 1);
     const updateAction = actions.slice(start, end);
     expect(updateAction).toContain('assertRole("manager")');
     expect(updateAction).toContain('supabase.rpc("update_task_details"');

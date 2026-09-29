@@ -109,6 +109,21 @@ export const workOrderInputSchema = z.object({
 
 export type WorkOrderInput = z.infer<typeof workOrderInputSchema>;
 
+const optionalIsoDate = z
+  .string()
+  .trim()
+  .optional()
+  .default("")
+  .refine((value) => value === "" || parseScheduleDates(value, 1) !== null, "Enter a valid date");
+
+// Editing a saved order changes its header and total. Jobs are edited one at a
+// time on the order page, so there is no task list here.
+export const workOrderDetailsInputSchema = workOrderInputSchema
+  .omit({ clientId: true, tasks: true })
+  .extend({ issuedAt: optionalIsoDate, startDate: optionalIsoDate, dueDate: optionalIsoDate });
+
+export type WorkOrderDetailsInput = z.infer<typeof workOrderDetailsInputSchema>;
+
 export function parseTaskLines(input: string) {
   const headerNames = new Set(TRADE_CATEGORIES.map((trade) => trade.toLowerCase()));
   let trade = "Miscellaneous";

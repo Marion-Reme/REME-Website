@@ -86,7 +86,10 @@ describe("no action returns a raw database message", () => {
 
 describe("reopenTask", () => {
   const source = read("src/actions/work-orders.ts").replace(/\s+/g, " ");
-  const body = source.slice(source.indexOf("export async function reopenTask"));
+  // Bounded by the next export so actions added after it are not counted.
+  const start = source.indexOf("export async function reopenTask");
+  const next = source.indexOf("export async function", start + 1);
+  const body = source.slice(start, next === -1 ? undefined : next);
 
   it("authorises once instead of three times", () => {
     expect(body.match(/assertRole\("manager"\)/g)).toHaveLength(1);
