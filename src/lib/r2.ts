@@ -1,5 +1,6 @@
 import "server-only";
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -75,4 +76,22 @@ export async function statObject(key: string): Promise<StoredObject | null> {
   } catch {
     return null;
   }
+}
+
+// Single-object deletes rather than DeleteObjects: the batch call requires a
+// request checksum, and single deletes keep this independent of which checksum
+// headers the SDK and R2 happen to agree on. Returns the keys that failed.
+export async function deleteObjects(keys: string[], concurrency = 8): Promise<string[]> {
+  const { client, bucket } = r2();
+  const failed: string[] = [];
+  for (let start = 0; start < keys.length; start += concurrency) {
+    const batch = keys.slice(start, start + concurrency);
+    const results = await Promise.allSettled(
+      batch.map((key) => client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))),
+    );
+    results.forEach((result, index) => {
+      if (result.status === "rejected") failed.push(batch[index]);
+    });
+  }
+  return failed;
 }

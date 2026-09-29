@@ -4,11 +4,81 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { assertRole } from "@/lib/auth";
-import { parseScheduleDates, taskDetailsInputSchema, workOrderInputSchema } from "@/lib/domain";
+import {
+  parseScheduleDates,
+  taskDetailsInputSchema,
+  taskInputSchema,
+  workOrderDetailsInputSchema,
+  workOrderInputSchema,
+} from "@/lib/domain";
+import { deleteObjects } from "@/lib/r2";
 import { logger } from "@/lib/redact";
 import { createClient } from "@/lib/supabase/server";
 import { actionError, throwActionError } from "@/actions/errors";
 import type { ActionState } from "@/actions/types";
+
+const WORK_ORDER_HEADER_FIELDS = [
+  "clientName",
+  "customerName",
+  "customerPhone",
+  "streetAddress",
+  "suburb",
+  "state",
+  "postcode",
+  "siteContactName",
+  "siteContactPhone",
+  "workOrderNumber",
+  "jobNumber",
+  "clientReference",
+  "supervisorName",
+  "supervisorPhone",
+  "issuedAt",
+  "startDate",
+  "dueDate",
+  "notes",
+  "additionalInstructions",
+  "totalCents",
+  "duplicateReason",
+] as const;
+
+// Creating and editing an order read the same header fields from the form.
+function readWorkOrderHeader(formData: FormData) {
+  return Object.fromEntries(WORK_ORDER_HEADER_FIELDS.map((field) => [field, formData.get(field)]));
+}
+
+// Every page that lists or counts work orders, for the lifecycle actions below.
+function revalidateWorkOrderViews(workOrderId?: number | null) {
+  if (workOrderId) revalidatePath(`/manager/work-orders/${workOrderId}`);
+  for (const path of [
+    "/manager",
+    "/manager/work-orders",
+    "/manager/calendar",
+    "/manager/review",
+    "/worker",
+    "/worker/jobs",
+    "/worker/upcoming",
+    "/worker/history",
+  ])
+    revalidatePath(path);
+}
+
+// Deletes the R2 objects behind files a delete RPC removed. The database rows are
+// already gone when this runs, so a failure only leaves orphaned objects in the
+// private bucket. It is logged, and never reported as a failed delete.
+async function removeStoredFiles(scope: string, storageKeys: unknown) {
+  const keys = Array.isArray(storageKeys)
+    ? storageKeys.filter((key): key is string => typeof key === "string" && key.length > 0)
+    : [];
+  if (!keys.length) return;
+  try {
+    const failed = await deleteObjects(keys);
+    if (failed.length) logger.error(`${scope}.storage_cleanup_failed`, { failed: failed.length });
+  } catch (error) {
+    logger.error(`${scope}.storage_cleanup_failed`, error);
+  }
+}
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 export async function createWorkOrder(_: ActionState, formData: FormData): Promise<ActionState> {
   await assertRole("manager");
@@ -18,31 +88,7 @@ export async function createWorkOrder(_: ActionState, formData: FormData): Promi
   } catch {
     return { error: "The task list could not be read." };
   }
-  const raw = {
-    clientName: formData.get("clientName"),
-    customerName: formData.get("customerName"),
-    customerPhone: formData.get("customerPhone"),
-    streetAddress: formData.get("streetAddress"),
-    suburb: formData.get("suburb"),
-    state: formData.get("state"),
-    postcode: formData.get("postcode"),
-    siteContactName: formData.get("siteContactName"),
-    siteContactPhone: formData.get("siteContactPhone"),
-    workOrderNumber: formData.get("workOrderNumber"),
-    jobNumber: formData.get("jobNumber"),
-    clientReference: formData.get("clientReference"),
-    supervisorName: formData.get("supervisorName"),
-    supervisorPhone: formData.get("supervisorPhone"),
-    issuedAt: formData.get("issuedAt"),
-    startDate: formData.get("startDate"),
-    dueDate: formData.get("dueDate"),
-    notes: formData.get("notes"),
-    additionalInstructions: formData.get("additionalInstructions"),
-    totalCents: formData.get("totalCents"),
-    duplicateReason: formData.get("duplicateReason"),
-    tasks,
-  };
-  const parsed = workOrderInputSchema.safeParse(raw);
+  const parsed = workOrderInputSchema.safeParse({ ...readWorkOrderHeader(formData), tasks });
   if (!parsed.success)
     return {
       error: "Check the highlighted information and try again.",
@@ -122,42 +168,53 @@ export async function updateTaskDetails(_: ActionState, formData: FormData): Pro
   };
 }
 
-export async function assignWholeOrder(_: ActionState, formData: FormData): Promise<ActionState> {
+// Assigns every open job on the order to the chosen workers at once. Work days
+// are optional; leaving them empty keeps the plan the order already has.
+export async function assignWorkOrderCrew(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
   await assertRole("manager");
   const workOrderId = Number(formData.get("workOrderId"));
-  const workerId = Number(formData.get("workerId"));
-  const dates = parseScheduleDates(String(formData.get("dates") ?? ""));
-  if (
-    !Number.isInteger(workOrderId) ||
-    workOrderId < 1 ||
-    !Number.isInteger(workerId) ||
-    workerId < 1
-  )
-    return { error: "Choose a worker." };
-  if (!dates) return { error: "Choose between 1 and 62 valid schedule dates." };
+  if (!Number.isInteger(workOrderId) || workOrderId < 1)
+    return { error: "The work order is invalid." };
+  const clear = formData.get("intent") === "clear";
+  const workerIds = clear
+    ? []
+    : [...new Set(formData.getAll("workerIds").map(Number))].filter(
+        (id) => Number.isInteger(id) && id > 0,
+      );
+  if (!clear && !workerIds.length) return { error: "Choose at least one worker." };
+  const chosenLead = Number(formData.get("leadWorkerId"));
+  const leadWorkerId = clear
+    ? null
+    : workerIds.includes(chosenLead)
+      ? chosenLead
+      : (workerIds[0] ?? null);
+  const rawDates = clear ? "" : String(formData.get("dates") ?? "").trim();
+  const dates = rawDates ? parseScheduleDates(rawDates) : null;
+  if (rawDates && !dates) return { error: "Choose between 1 and 62 valid work dates." };
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("assign_and_schedule_whole_order", {
+  const { data, error } = await supabase.rpc("assign_work_order_crew", {
     p_work_order_id: workOrderId,
-    p_worker_id: workerId,
+    p_worker_ids: workerIds,
+    p_lead_worker_id: leadWorkerId,
     p_dates: dates,
-    p_preserve_existing: formData.get("preserveExisting") === "on",
   });
-  if (error) return actionError("work_order.assign_whole", error);
+  if (error) return actionError("work_order.assign_crew", error);
   const result = data as {
+    crewSize?: number;
+    addedWorkers?: number;
+    removedWorkers?: number;
     assignedTasks?: number;
-    scheduledTasks?: number;
     scheduledDays?: number;
   } | null;
-  revalidatePath(`/manager/work-orders/${workOrderId}`);
-  revalidatePath("/manager");
-  revalidatePath("/manager/calendar");
-  revalidatePath("/worker");
-  revalidatePath("/worker/jobs");
-  revalidatePath("/worker/upcoming");
-  const scheduledDays = result?.scheduledDays ?? dates.length;
+  revalidateWorkOrderViews(workOrderId);
+  if (clear) return { ok: true, message: "Everyone was unassigned from this work order." };
+  const scheduledDays = result?.scheduledDays ?? 0;
   return {
     ok: true,
-    message: `${result?.assignedTasks ?? 0} tasks assigned and ${result?.scheduledTasks ?? 0} one-hour blocks scheduled from 8:00am across ${scheduledDays} day${scheduledDays === 1 ? "" : "s"}.`,
+    message: `${plural(result?.crewSize ?? workerIds.length, "worker")} assigned to all ${plural(result?.assignedTasks ?? 0, "open job")}${scheduledDays ? ` and booked on ${plural(scheduledDays, "day")}` : ""}.`,
   };
 }
 
@@ -392,4 +449,171 @@ export async function reopenTask(formData: FormData) {
   revalidatePath("/manager/work-orders");
   revalidatePath("/manager/review");
   revalidatePath(`/worker/tasks/${taskId}`);
+}
+
+export async function updateWorkOrderDetails(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await assertRole("manager");
+  const workOrderId = Number(formData.get("workOrderId"));
+  if (!Number.isInteger(workOrderId) || workOrderId < 1)
+    return { error: "The work order is invalid." };
+  const parsed = workOrderDetailsInputSchema.safeParse(readWorkOrderHeader(formData));
+  if (!parsed.success)
+    return {
+      error: "Check the highlighted information and try again.",
+      fieldErrors: z.flattenError(parsed.error).fieldErrors,
+    };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("update_work_order_details", {
+    p_work_order_id: workOrderId,
+    p_payload: parsed.data,
+  });
+  if (error) return actionError("work_order.update_details", error);
+  revalidateWorkOrderViews(workOrderId);
+  redirect(`/manager/work-orders/${workOrderId}?notice=saved`);
+}
+
+export async function addWorkOrderTask(_: ActionState, formData: FormData): Promise<ActionState> {
+  await assertRole("manager");
+  const workOrderId = Number(formData.get("workOrderId"));
+  if (!Number.isInteger(workOrderId) || workOrderId < 1)
+    return { error: "The work order is invalid." };
+  const parsed = taskInputSchema.safeParse({
+    trade: formData.get("trade"),
+    area: formData.get("area"),
+    description: formData.get("description"),
+    quantity: formData.get("quantity"),
+    unit: formData.get("unit"),
+  });
+  if (!parsed.success)
+    return {
+      error: "Check the job details and try again.",
+      fieldErrors: z.flattenError(parsed.error).fieldErrors,
+    };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("add_work_order_task", {
+    p_work_order_id: workOrderId,
+    p_trade: parsed.data.trade,
+    p_description: parsed.data.description,
+    p_quantity: parsed.data.quantity,
+    p_unit: parsed.data.unit,
+    p_area_label: parsed.data.area || null,
+  });
+  if (error) return actionError("task.add", error);
+  const assigned = (data as { assignedWorkers?: number } | null)?.assignedWorkers ?? 0;
+  revalidateWorkOrderViews(workOrderId);
+  return {
+    ok: true,
+    message: `Job added${assigned ? ` and assigned to the crew of ${assigned}` : ""}.`,
+  };
+}
+
+// Permanent. The confirmation step lives in the form; the RPC refuses to remove
+// the last job, since an order with no jobs should be deleted as a whole.
+export async function deleteTask(_: ActionState, formData: FormData): Promise<ActionState> {
+  await assertRole("manager");
+  const taskId = Number(formData.get("taskId"));
+  if (!Number.isInteger(taskId) || taskId < 1) return { error: "The job is invalid." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("delete_task", { p_task_id: taskId });
+  if (error) return actionError("task.delete", error);
+  const result = data as {
+    workOrderId?: number;
+    notifiedWorkers?: number;
+    storageKeys?: unknown;
+  } | null;
+  await removeStoredFiles("task.delete", result?.storageKeys);
+  revalidateWorkOrderViews(result?.workOrderId);
+  revalidatePath(`/worker/tasks/${taskId}`);
+  const notified = result?.notifiedWorkers ?? 0;
+  return {
+    ok: true,
+    message: `Job deleted${notified ? ` and ${plural(notified, "worker")} notified` : ""}.`,
+  };
+}
+
+// Permanent. The manager must type the order number, and the RPC checks it again.
+export async function deleteWorkOrder(_: ActionState, formData: FormData): Promise<ActionState> {
+  await assertRole("manager");
+  const workOrderId = Number(formData.get("workOrderId"));
+  const confirmation = String(formData.get("confirmation") ?? "").trim();
+  if (!Number.isInteger(workOrderId) || workOrderId < 1)
+    return { error: "The work order is invalid." };
+  if (!confirmation) return { error: "Type the work order number to confirm the deletion." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("delete_work_order", {
+    p_work_order_id: workOrderId,
+    p_confirmation: confirmation,
+  });
+  if (error) return actionError("work_order.delete", error);
+  await removeStoredFiles(
+    "work_order.delete",
+    (data as { storageKeys?: unknown } | null)?.storageKeys,
+  );
+  revalidateWorkOrderViews();
+  redirect("/manager/work-orders?notice=deleted");
+}
+
+// Marks one job complete when a taskId is sent, otherwise every open job on the
+// order. A fully complete order moves to the Completed tab.
+export async function completeWorkOrderTasks(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await assertRole("manager");
+  const workOrderId = Number(formData.get("workOrderId"));
+  const rawTaskId = String(formData.get("taskId") ?? "");
+  const taskId = rawTaskId ? Number(rawTaskId) : null;
+  if (!Number.isInteger(workOrderId) || workOrderId < 1)
+    return { error: "The work order is invalid." };
+  if (taskId !== null && (!Number.isInteger(taskId) || taskId < 1))
+    return { error: "The job is invalid." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("complete_work_order_tasks", {
+    p_work_order_id: workOrderId,
+    p_task_ids: taskId === null ? null : [taskId],
+  });
+  if (error) return actionError("work_order.complete", error);
+  const result = data as {
+    completedTasks?: number;
+    workOrderStatus?: string;
+    approvedSubmissions?: number;
+  } | null;
+  revalidateWorkOrderViews(workOrderId);
+  if (taskId !== null) revalidatePath(`/worker/tasks/${taskId}`);
+  const completed = result?.completedTasks ?? 0;
+  if (!completed) return { ok: true, message: "There were no open jobs left to complete." };
+  const archived = result?.workOrderStatus === "signed_off";
+  return {
+    ok: true,
+    message:
+      taskId === null
+        ? "Work order completed and moved to the Completed tab."
+        : archived
+          ? "Job completed. That was the last open job, so the work order moved to the Completed tab."
+          : "Job marked complete.",
+  };
+}
+
+export async function reopenWorkOrder(_: ActionState, formData: FormData): Promise<ActionState> {
+  await assertRole("manager");
+  const workOrderId = Number(formData.get("workOrderId"));
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!Number.isInteger(workOrderId) || workOrderId < 1)
+    return { error: "The work order is invalid." };
+  if (reason.length > 500) return { error: "A reason must be 500 characters or fewer." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("reopen_work_order", {
+    p_work_order_id: workOrderId,
+    p_reason: reason || null,
+  });
+  if (error) return actionError("work_order.reopen", error);
+  const reopened = (data as { reopenedTasks?: number } | null)?.reopenedTasks ?? 0;
+  revalidateWorkOrderViews(workOrderId);
+  return {
+    ok: true,
+    message: `Work order reopened with ${plural(reopened, "job")} back in active work.`,
+  };
 }
