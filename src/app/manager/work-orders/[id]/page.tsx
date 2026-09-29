@@ -327,7 +327,7 @@ export default async function WorkOrderDetailPage({
             )}
           </Card>
           <Card className="overflow-hidden">
-            <div className="flex items-center justify-between border-b border-[#ebe7df] px-5 py-4 sm:px-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ebe7df] px-5 py-4 sm:px-6">
               <div>
                 <h2 className="text-lg font-semibold">Jobs by trade</h2>
                 <p className="text-sm text-[#77817e]">
@@ -335,7 +335,13 @@ export default async function WorkOrderDetailPage({
                   open
                 </p>
               </div>
-              <Badge tone="teal">Operational scope</Badge>
+              {isActive && openTasks.length > 0 ? (
+                <CompleteWorkOrderForm workOrderId={order.id} openJobs={openTasks.length} />
+              ) : isCompleted ? (
+                <Badge tone="green">All jobs complete</Badge>
+              ) : (
+                <Badge tone="teal">Operational scope</Badge>
+              )}
             </div>
             {Object.entries(grouped).map(([trade, tasks]) => (
               <section key={trade}>
@@ -527,11 +533,6 @@ export default async function WorkOrderDetailPage({
               </div>
             )}
           </Card>
-          {isActive && openTasks.length > 0 && (
-            <Card className="p-5">
-              <CompleteWorkOrderForm workOrderId={order.id} openJobs={openTasks.length} />
-            </Card>
-          )}
           {isCompleted && (
             <Card className="p-5">
               <div className="mb-3 flex items-center gap-2">

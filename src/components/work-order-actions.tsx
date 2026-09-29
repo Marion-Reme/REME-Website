@@ -8,7 +8,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import { Archive, CheckCircle2, LoaderCircle, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CheckCheck, CheckCircle2, LoaderCircle, Plus, RotateCcw, Trash2 } from "lucide-react";
 import {
   addWorkOrderTask,
   completeWorkOrderTasks,
@@ -174,6 +174,8 @@ export function AddJobForm({ workOrderId }: { workOrderId: number }) {
   );
 }
 
+// A visible button rather than a collapsed section, with one inline "are you
+// sure" step: it closes every open job and moves the order to Completed.
 export function CompleteWorkOrderForm({
   workOrderId,
   openJobs,
@@ -182,25 +184,39 @@ export function CompleteWorkOrderForm({
   openJobs: number;
 }) {
   const [state, action] = useActionState(completeWorkOrderTasks, {} as ActionState);
+  const [confirming, setConfirming] = useState(false);
+  if (!confirming)
+    return (
+      <div className="flex flex-col items-start gap-1 sm:items-end">
+        <Button type="button" size="sm" onClick={() => setConfirming(true)}>
+          <CheckCheck className="h-4 w-4" />
+          Mark all jobs complete
+        </Button>
+        <Feedback state={state} className="text-xs" />
+      </div>
+    );
   return (
-    <details>
-      <summary className="inline-flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-[#2f6249]">
-        <Archive className="h-4 w-4" />
-        Mark work order complete
-      </summary>
-      <form action={action} className="mt-3 space-y-3">
-        <input type="hidden" name="workOrderId" value={workOrderId} />
-        <p className="text-sm leading-6 text-[#5d6865]">
-          Marks {openJobs === 1 ? "the last open job" : `all ${openJobs} open jobs`} complete,
-          approves anything workers have sent in for review, clears the days ahead and moves the
-          order to the Completed tab. You can reopen it later.
-        </p>
-        <SubmitButton className="w-full" pendingText="Completing...">
-          Complete work order
+    <form
+      action={action}
+      className="w-full space-y-3 rounded-xl border border-[#cfe4d8] bg-[#eaf5ee] p-3"
+    >
+      <input type="hidden" name="workOrderId" value={workOrderId} />
+      <p className="text-sm leading-6 text-[#2f4f3e]">
+        Mark {openJobs === 1 ? "the last open job" : `all ${openJobs} open jobs`} complete? Anything
+        workers have sent in for review is approved, the days ahead are cleared and the order moves
+        to the Completed tab. You can reopen it later.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <SubmitButton size="sm" pendingText="Completing...">
+          <CheckCheck className="h-4 w-4" />
+          Yes, complete all jobs
         </SubmitButton>
-        <Feedback state={state} />
-      </form>
-    </details>
+        <Button type="button" size="sm" variant="secondary" onClick={() => setConfirming(false)}>
+          Cancel
+        </Button>
+      </div>
+      <Feedback state={state} />
+    </form>
   );
 }
 
